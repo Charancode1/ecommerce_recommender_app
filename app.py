@@ -1,55 +1,44 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
 import joblib
-from sklearn.metrics.pairwise import cosine_similarity
 
-# --- Set up Drive file download ---
-@st.cache_data
-def load_similarity_matrix():
-    url = "https://drive.google.com/uc?id=1yz9hrIN1VLOApuzr5Kiq_Dq39gu4p3GB"
-    output_path = "product_similarity.pkl"
-    
-    # Download the file
-    response = requests.get(url)
-    with open(output_path, "wb") as f:
-        f.write(response.content)
+# Load the trained model and scaler
+kmeans = joblib.load("rfm_kmeans.pkl")
+scaler = joblib.load("rfm_scaler.pkl")
 
-    return joblib.load(output_path)
+# Streamlit UI
+st.set_page_config(page_title="RFM Customer Segment Predictor", layout="centered")
 
-# --- Load data ---
-@st.cache_data
-def load_product_data():
-    # Sample product list (replace with actual if available)
-    return pd.DataFrame({
-        "product_name": [
-            "Laptop Sleeve", "Bluetooth Headphones", "Gaming Mouse", 
-            "LED Monitor", "Portable Charger"
-        ]
-    })
+st.title("🛍️ RFM Customer Segment Predictor")
+st.write("Provide your customer data below to predict the customer segment using a trained KMeans model.")
 
-# --- Recommender Function ---
-def recommend_products(selected_product, product_list, similarity_matrix):
-    idx = product_list.index(selected_product)
-    similarity_scores = list(enumerate(similarity_matrix[idx]))
-    similarity_scores = sorted(similarity_scores, key=lambda x: x[1], reverse=True)
-    recommended = [product_list[i[0]] for i in similarity_scores[1:6]]
-    return recommended
+# Input fields
+recency = st.number_input("Recency (days since last purchase)", min_value=0, max_value=1000, value=30)
+frequency = st.number_input("Frequency (number of purchases)", min_value=0, max_value=1000, value=10)
+monetary = st.number_input("Monetary Value (total spent)", min_value=0.0, max_value=100000.0, value=500.0)
 
-# --- Streamlit UI ---
-st.title("🛍️ E-Commerce Product Recommender")
-product_df = load_product_data()
-similarity_matrix = load_similarity_matrix()
+if st.button("Predict Segment"):
+    try:
+        input_data = pd.DataFrame([[recency, frequency, monetary]], columns=["Recency", "Frequency", "Monetary"])
+        scaled_data = scaler.transform(input_data)
+        segment = kmeans.predict(scaled_data)[0]
+        
+        st.success(f"✅ Predicted Customer Segment: **Segment {segment}**")
+        
+        # Optional: Add descriptions for each segment if known
+        segment_descriptions = {
+            0: "💎 Loyal customers who buy frequently and spend a lot.",
+            1: "🛍️ Average customers with moderate activity.",
+            2: "⏸️ Inactive or low-value customers."
+        }
+        st.info(segment_descriptions.get(segment, "Segment description not available."))
 
-selected = st.selectbox("Choose a product", product_df['product_name'].values)
+    except Exception as e:
+        st.error(f"Something went wrong during prediction. Error: {str(e)}")
 
-if st.button("Recommend Similar Products"):
-    recommendations = recommend_products(selected, list(product_df['product_name']), similarity_matrix)
-    st.subheader("You may also like:")
-    for rec in recommendations:
-        st.write(f"✅ {rec}")
-
-
+# Footer
+st.markdown("---")
+st.caption("Built with ❤️ using Streamlit.")
 
 
